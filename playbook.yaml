@@ -1,0 +1,26 @@
+---
+- name: Default Packages Role
+  hosts: all
+  roles:
+    - role: default_packages
+
+- name: Netbox Role
+  hosts: localhost
+  gather_facts: False
+  roles:
+    - role: netbox 
+
+- name: Kubernetes Role
+  hosts: all
+  tags: 
+    - kubernetes
+  roles:
+    - role: kubernetes
+
+- name: Docker Role
+  hosts: "{{ hosts }}"
+  tags:
+    - docker_login_proxy
+    - docker_login_local
+  roles:
+    - role: docker

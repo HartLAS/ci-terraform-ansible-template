@@ -1,0 +1,113 @@
+cache:
+  paths:
+    - .terraform
+
+variables:
+  TF_ADDRESS: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${CI_COMMIT_BRANCH}_state"
+
+stages:
+  - Terraform Plan
+  - Terraform Apply
+  - Ansible Configure
+  - Ansible Netbox
+
+.run_parcer: &run_parcer
+  - pip3.8 install pyhcl
+  - pip3.8 install pyyaml
+  - pip3.8 install pyjson
+  - | 
+      curl -H "Authorization: Bearer ${TF_PASSWORD}" "${TF_ADDRESS}" -O --insecure --silent
+  - python3.8 parcer.py ${CI_COMMIT_BRANCH}_state
+
+.terraform_init: &terraform_init
+  - terraform init -plugin-dir="/opt/.terraform/plugins/"
+      -reconfigure
+      -backend-config=address=${TF_ADDRESS}
+      -backend-config=lock_address=${TF_ADDRESS}/lock
+      -backend-config=unlock_address=${TF_ADDRESS}/lock
+      -backend-config=username=${TF_USERNAME}
+      -backend-config=password=${TF_PASSWORD}
+      -backend-config=lock_method=POST
+      -backend-config=unlock_method=DELETE
+      -backend-config=retry_wait_min=5
+  
+Plan:
+  stage: Terraform Plan
+  artifacts:
+    paths:
+      - '**/*.tfplan'
+      - '**/.terraform.lock.hcl'
+  before_script:
+    - *terraform_init
+  script:
+    - terraform validate
+    - terraform plan
+
+Apply:
+  stage: Terraform Apply
+  artifacts:
+    paths:
+      - '**/*.tfplan'
+      - '**/.terraform.lock.hcl'
+  before_script:
+    - *terraform_init
+  script:
+    - terraform apply -auto-approve 
+  when: manual
+
+Refresh state:
+  stage: Terraform Apply
+  artifacts:
+    paths:
+      - '**/*.tfplan'
+      - '**/.terraform.lock.hcl'
+  before_script:
+    - *terraform_init
+  script:
+    - echo "Сплю 60 секунд, пока VM Tools получают IP"
+    - sleep 60
+    - terraform apply -auto-approve -refresh-only
+  when: manual
+
+Configure System:
+  stage: Ansible Configure
+  before_script:
+    - *run_parcer
+  script:
+    -  sudo ansible-playbook playbook.yaml -i inventory.yaml --vault-password-file /home/.ansible/installer_key --tags="configure_system"
+  when: manual
+
+Reboot All hosts:
+  stage: Ansible Configure
+  before_script:
+    - *run_parcer
+  script:
+    -  sudo ansible-playbook playbook.yaml -i inventory.yaml --vault-password-file /home/.ansible/installer_key --tags="reboot"
+  when: manual
+  
+Write/Update:
+  stage: Ansible Netbox
+  before_script:
+    - *run_parcer
+  script:
+    -  sudo ansible-playbook playbook.yaml -i inventory.yaml --vault-password-file /home/.ansible/installer_key --tags="netbox, netbox_in"
+  when: manual
+
+Delete:
+  stage: Ansible Netbox
+  before_script:
+    - *run_parcer
+  script:
+    -  sudo ansible-playbook playbook.yaml -i inventory.yaml --vault-password-file /home/.ansible/installer_key --tags="netbox, netbox_destroy"
+  when: manual
+
+Create or update K8s Cluster:
+  stage: Ansible Configure
+  before_script:
+    - *run_parcer
+    - ansible-galaxy collection install ansible.posix
+    - ansible-galaxy collection install community.general
+    - ansible-galaxy collection install community.docker
+  script:
+    -  sudo ansible-playbook playbook.yaml -i inventory.yaml --vault-password-file /home/.ansible/installer_key --tags="kubernetes"
+  when: manual

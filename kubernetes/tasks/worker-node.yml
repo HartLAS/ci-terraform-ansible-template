@@ -1,0 +1,12 @@
+- name: Checking cluster path
+  stat:
+    path: "/etc/kubernetes/pki"
+  register: ca_path
+
+- name: Copy the join command to server location
+  copy: src=/tmp/join-command dest=/tmp/join-command.sh mode=0777
+  when: not ca_path.stat.exists
+
+- name: Join the node to cluster
+  command: sh /tmp/join-command.sh
+  when: not ca_path.stat.exists

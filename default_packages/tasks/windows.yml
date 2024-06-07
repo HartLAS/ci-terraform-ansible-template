@@ -1,0 +1,53 @@
+---
+### tasks for Windows Server
+- include_vars:
+    file: windows_packages.yml
+  tags: 
+    - configure_system
+
+## У нас осуществляется проверка по имени службы!!!!!!!!!! Если нет службы - не установлена программа. Учитывайте это с виндой
+- name: Getting packages statuses
+  win_shell: "get-service -Name '{{ item.value.name }}' -erroraction 'silentlycontinue' | Select-Object Status | Format-Table -HideTableHeaders"
+  ignore_errors: true
+  with_items: "{{ install | dict2items }}"
+  register: packages_statuses
+  when: hostvars[inventory_hostname].skip_this_machine == false
+  tags: 
+    - configure_system
+
+- name: Installing Block
+  block:
+    - name: Installing Zabbix Agent
+      win_package:
+        path: "{{item.value.path}}"
+        arguments: >-
+          /qn
+          SERVER={{ default_zabbix_addr }}
+          SERVERACTIVE={{ default_zabbix_addr }}:10050
+          HOSTNAME={{ inventory_hostname }} ENABLEPATH=1
+        state: present
+      with_items: "{{ install | dict2items }}"
+      loop_control:
+        index_var: num_in_package_map
+      when: packages_statuses.results[num_in_package_map].rc == 1 and packages_statuses.results[num_in_package_map].item.value.name == "Zabbix Agent 2" and hostvars[inventory_hostname].skip_this_machine == false
+      register: installed_packages
+  tags: 
+    - configure_system
+
+- name: Reconfigure Zabbix block
+  block:
+    - name: Reconfiguring Zabbix Agent
+      win_template:
+        src: zabbix_agent2.j2
+        dest: 'C:\Program Files\Zabbix Agent 2\zabbix_agent2.conf'
+        force: true
+      when: hostvars[inventory_hostname].skip_this_machine == false
+
+    - name: Restarting Zabbix service
+      win_service:
+        name: "Zabbix Agent 2"
+        state: restarted
+      when: hostvars[inventory_hostname].skip_this_machine == false
+  tags: 
+    - configure_system
+

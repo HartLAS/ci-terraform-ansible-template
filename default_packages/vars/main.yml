@@ -1,0 +1,2 @@
+---
+secrets_linux_arr: "{{ lookup('hashi_vault', 'secret={{ vault_linux_secret }} token={{ vault_token }} url={{ vault_url }} validate_certs=False') }}"

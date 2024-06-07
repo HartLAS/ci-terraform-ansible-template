@@ -1,0 +1,43 @@
+---
+############ Default Vault Vars ##########
+vault_url: http://vault...
+vault_token: 
+
+#Service Accounts
+vault_service_accounts_kv: /kv/data/...
+service_accounts_arr: "{{ lookup('hashi_vault', 'secret={{ vault_service_accounts_kv }} token={{ vault_token }} url={{ vault_url }} validate_certs=False') }}"
+
+#Monitoring addresses
+vault_monitoring_addr_kv: /kv/metadata/...
+monitoring_addr_arr: "{{ lookup('hashi_vault', 'secret={{ vault_monitoring_addr_kv }} token={{ vault_token }} url={{ vault_url }} validate_certs=False') }}"
+
+#Repos addresses
+vault_repos_addr_kv: /kv/metadata/...
+vault_secrets_kv: /kv/data/...
+repos_addr_arr: "{{ lookup('hashi_vault', 'secret={{ vault_repos_addr_kv }} token={{ vault_token }} url={{ vault_url }} validate_certs=False') }}"
+repos_secrets_arr: "{{ lookup('hashi_vault', 'secret={{ vault_secrets_kv }} token={{ vault_token }} url={{ vault_url }} validate_certs=False') }}"
+
+#Netbox info
+vault_netbox_secrets_kv: /kv/data/...
+vault_netbox_metadata_kv: /kv/metadata/...
+netbox_secrets_arr:  "{{ lookup('hashi_vault', 'secret={{ vault_netbox_secrets_kv }} token={{ vault_token }} url={{ vault_url }} validate_certs=False') }}" 
+netbox_metadata_arr: "{{ lookup('hashi_vault', 'secret={{ vault_netbox_metadata_kv }} token={{ vault_token }} url={{ vault_url }} validate_certs=False') }}"
+
+############ Default Variables to use in playbook ############
+
+#Netbox
+netbox_addr: "{{ netbox_metadata_arr.custom_metadata.srv_addr }}"
+netbox_token: "{{ netbox_secrets_arr.token }}"
+
+#Zabbix
+zbx_addr: "{{ monitoring_addr_arr.custom_metadata.zbx_srv_addr }}"
+zbx_name: "{{ monitoring_addr_arr.custom_metadata.zbx_srv_name }}"
+
+#Repos
+lin_repo: "{{ repos_addr_arr.custom_metadata.lin_repo_web }}"
+nexus_repo: "{{ repos_addr_arr.custom_metadata.nexus_addr_web }}"
+nexus_login_addr: "{{ repos_addr_arr.custom_metadata.nexus_docker_addr }}"
+nexus_docker_local_repo_port: "{{ repos_addr_arr.custom_metadata.nexus_docker_local_port }}"
+nexus_docker_proxy_repo_port: "{{ repos_addr_arr.custom_metadata.nexus_docker_proxy_port }}"
+nexus_local_user: "{{ repos_secrets_arr.nexus_local_user }}"
+nexus_local_pass: "{{ repos_secrets_arr.nuxus_local_pass }}"

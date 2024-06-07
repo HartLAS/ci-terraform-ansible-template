@@ -1,0 +1,133 @@
+---
+# tasks file for kubernetes
+- name: Preinstalling
+  block:
+
+  - name: Installing packages
+    apt:
+      name: "{{ item }}"
+      state: present
+    with_items:
+      - mount
+      - ebtables
+      - ethtool
+      - conntrack
+
+  - name: Adding APT key for Docker
+    apt_key:
+      url: https://download.docker.com/linux/ubuntu/gpg
+      state: present
+
+  - name: Adding apt repo for Docker
+    ansible.builtin.apt_repository:
+      repo: deb [arch=amd64] https://download.docker.com/linux/{{ ansible_distribution | lower  }} {{ ansible_distribution_release }} stable
+      state: present
+
+  - name: Install Docker and ContainerD
+    ansible.builtin.apt:
+      pkg:
+      - docker-ce 
+      - docker-ce-cli
+      - containerd.io
+
+  - name: Remove SWAP from fstab
+    ansible.posix.mount:
+      name: "{{ item }}"
+      fstype: swap
+      state: absent
+    with_items:
+      - swap
+      - none
+
+  - name: Disable swap
+    shell: /usr/sbin/swapoff -a
+    when: ansible_swaptotal_mb > 0
+
+  - name: Adding hosts in /etc/hosts
+    lineinfile:
+      dest: /etc/hosts
+      line: "{{ hostvars[item].ansible_ssh_host }} {{ item }}"
+    with_items: "{{ hostvars }}"
+
+  - name: Creating ContainerD config dir
+    command: "{{ item }}" 
+    with_items:
+      - mkdir -p /etc/containerd
+
+
+  - name: Creating ContainderD config
+    shell: /usr/bin/containerd config default > /etc/containerd/config.toml
+
+  - name: Restart service containerd
+    ansible.builtin.service:
+      name: containerd
+      state: restarted
+
+  - name: Enable service containerd 
+    ansible.builtin.service:
+      name: containerd
+      enabled: yes
+
+  - name: Copy modules
+    ansible.builtin.copy:
+      src: k8s.conf
+      dest: /etc/modules-load.d/k8s.conf
+
+  - name: Enable modules
+    community.general.modprobe:
+      name: "{{ item }}"
+      state: present
+    with_items:
+      - overlay
+      - br_netfilter
+      - nf_conntrack
+
+  - name: Adding bridge and forward
+    ansible.builtin.copy:
+      src: kubernetes.conf
+      dest: /etc/sysctl.d/kubernetes.conf
+
+  - name: Add an apt signing key for Kubernetes
+    shell: "curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor --yes -o /etc/apt/trusted.gpg.d/kubernetes-apt-keyring.gpg"
+
+  - name: Adding apt repository for Kubernetes
+    apt_repository:
+      repo: deb [signed-by=/etc/apt/trusted.gpg.d/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /
+      state: present
+      filename: kubernetes
+
+  - name: Install Kubernetes binaries
+    apt: 
+      name: "{{ packages }}"
+      state: present
+      update_cache: yes
+    vars:
+      packages:
+        - kubelet 
+        - kubeadm 
+        - kubectl
+        - ethtool
+
+  when: "'master' in inventory_hostname or 'worker' in inventory_hostname"
+
+- name: Apply sysctl params without reboot.
+  command: '/usr/sbin/sysctl --system'
+
+############## Тут уже добавляем в кластер
+- include_tasks:
+    file: master-node.yml
+  when: "'master' in inventory_hostname"
+
+- include_tasks:
+    file: worker-node.yml
+  when: "'worker' in inventory_hostname"
+
+- name: Getting Cluster Info
+  shell: 'kubectl get nodes -o wide'
+  when: "'master-1' in inventory_hostname"
+  register: clstr_info
+
+- name: Cluster Output
+  debug:
+    msg: "{{ clstr_info.stdout_lines }}"
+  when: "'master-1' in inventory_hostname"

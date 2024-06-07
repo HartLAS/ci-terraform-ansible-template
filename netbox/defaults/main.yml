@@ -1,0 +1,20 @@
+---
+############ Default Vault Vars ##########
+vault_url: http://vault...
+vault_token: 
+
+#Service Accounts
+vault_service_accounts_kv: /kv/data/...
+service_accounts_arr: "{{ lookup('hashi_vault', 'secret={{ vault_service_accounts_kv }} token={{ vault_token }} url={{ vault_url }} validate_certs=False') }}"
+
+#Netbox info
+vault_netbox_secrets_kv: /kv/data/...
+vault_netbox_metadata_kv: /kv/metadata/...
+netbox_secrets_arr:  "{{ lookup('hashi_vault', 'secret={{ vault_netbox_secrets_kv }} token={{ vault_token }} url={{ vault_url }} validate_certs=False') }}" 
+netbox_metadata_arr: "{{ lookup('hashi_vault', 'secret={{ vault_netbox_metadata_kv }} token={{ vault_token }} url={{ vault_url }} validate_certs=False') }}"
+
+############ Default Variables to use in playbook ############
+
+#Netbox
+netbox_addr: "{{ netbox_metadata_arr.custom_metadata.srv_addr }}"
+netbox_token: "{{ netbox_secrets_arr.token }}"

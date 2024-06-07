@@ -1,0 +1,12 @@
+---
+- include_tasks:
+    file: linux.yml
+  when: "'linux' in group_names"
+  tags: 
+    - configure_system
+
+- name: Reboot VM
+  tags:
+    - reboot
+  ansible.builtin.reboot:
+    reboot_timeout: 10

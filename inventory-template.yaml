@@ -1,0 +1,16 @@
+---
+  linux:
+    vars:
+      ansible_user: "{{ service_accounts_arr.linux_login }}"
+      ansible_password: "{{ service_accounts_arr.linux_pass }}"
+      connection_protocol: ssh
+      ansible_become: true
+      ansible_become_user: root
+      ansible_become_method: su
+      ansible_become_password: "{{ service_accounts_arr.linux_pass }}"
+  windows:
+    vars:
+      ansible_user: "{{ service_accounts_arr.windows_login }}"
+      ansible_password: "{{ service_accounts_arr.windows_pass }}"
+      connection_protocol: ssh
+      ansible_shell_type: powershell

@@ -1,0 +1,30 @@
+---
+centos_packages:
+  - epel-release
+  - bind-utils
+  - net-tools
+  - zabbix-agent2
+  - rsync
+  - rsyslog
+  - mc
+  - curl
+  - wget
+  - apt-transport-https
+  - gnupg2 
+  - software-properties-common
+  - ca-certificates
+  - parted
+deb_packages:
+  - dnsutils
+  - net-tools
+  - zabbix-agent2
+  - rsync
+  - rsyslog
+  - mc
+  - curl
+  - wget
+  - apt-transport-https
+  - gnupg2
+  - software-properties-common
+  - ca-certificates 
+  - parted

@@ -1,0 +1,114 @@
+---
+# tasks file for netbox
+- name: Create virtual machine
+  netbox.netbox.netbox_virtual_machine:
+    netbox_url: "{{ netbox_addr }}"
+    netbox_token: "{{ netbox_token }}"
+    validate_certs: no
+    data:
+      name: "{{ item }}"
+      virtual_machine_role: "Server"
+      site: "site"
+      cluster: "cluster"
+      vcpus: "{{ hostvars[item].cpus }}"
+      memory: "{{ hostvars[item].memory }}"
+      comments: "####Interfaces mac_addresses: {{ hostvars[item].interfaces }} <p>  All IP addresses: {{ hostvars[item].addresses }} <p> Disks in GB: {{ hostvars[item].disks }} <p> Datastore: {{ hostvars[item].datastore }}"
+      custom_fields:
+        Recource pool: "{{ hostvars[item].group_names[0] }}"
+        SSH: "{{ hostvars[item].ansible_ssh_host }}:22"
+    state: present
+  tags:
+    - netbox_in
+  with_items: "{{ hostvars }}"
+
+- name: Creating Interface to VM
+  netbox.netbox.netbox_vm_interface:
+    netbox_url: "{{ netbox_addr }}"
+    netbox_token: "{{ netbox_token }}"
+    validate_certs: no
+    data:
+      virtual_machine: "{{ item }}"
+      name: "ens192"
+      mac_address: "{{ hostvars[item].interfaces[0] }}"
+    state: present
+  tags:
+    - netbox_in
+  with_items: "{{ hostvars }}"
+
+- name: Create IP address
+  netbox.netbox.netbox_ip_address:
+    netbox_url: "{{ netbox_addr }}"
+    netbox_token: "{{ netbox_token }}"
+    validate_certs: no
+    data:
+      address: "{{ hostvars[item].ansible_ssh_host }}/24"
+      assigned_object:
+        name: "ens192"
+        virtual_machine: "{{ item }}"
+  tags:
+    - netbox_in
+  with_items: "{{ hostvars }}"
+
+- name: Updating VM
+  netbox.netbox.netbox_virtual_machine:
+    netbox_url: "{{ netbox_addr }}"
+    netbox_token: "{{ netbox_token }}"
+    validate_certs: no
+    data:
+      name: "{{ item }}"
+      virtual_machine_role: "Server"
+      site: "site"
+      cluster: "cluster"
+      primary_ip4: "{{ hostvars[item].ansible_ssh_host }}/24"
+      vcpus: "{{ hostvars[item].cpus }}"
+      memory: "{{ hostvars[item].memory }}"
+      comments: "####Interfaces mac_addresses: {{ hostvars[item].interfaces }} <p>  All IP addresses: {{ hostvars[item].addresses }} <p> Disks in GB: {{ hostvars[item].disks }} <p> Datastore: {{ hostvars[item].datastore }}"
+      custom_fields:
+        Recource pool: "{{ hostvars[item].group_names[0] }}"
+        SSH: "{{ hostvars[item].ansible_ssh_host }}:22"
+    state: present
+  tags:
+    - netbox_in
+  with_items: "{{ hostvars }}"
+
+
+- name: Delete IP address from netbox
+  netbox.netbox.netbox_ip_address:
+    netbox_url: "{{ netbox_addr }}"
+    netbox_token: "{{ netbox_token }}"
+    validate_certs: no
+    data:
+      address: "{{ hostvars[item].ansible_ssh_host }}/24"
+      assigned_object:
+        name: "ens192"
+        virtual_machine: "{{ item }}"
+    state: absent
+  tags:
+    - netbox_destroy
+  with_items: "{{ hostvars }}"
+
+- name: Delete interface from netbox
+  netbox.netbox.netbox_vm_interface:
+    netbox_url: "{{ netbox_addr }}"
+    netbox_token: "{{ netbox_token }}"
+    validate_certs: no
+    data:
+      virtual_machine: "{{ item }}"
+      name: "ens192"
+      mac_address: "{{ hostvars[item].interfaces[0] }}"
+    state: present
+  tags:
+    - netbox_destroy
+  with_items: "{{ hostvars }}"
+
+- name: Delete VM from netbox
+  netbox.netbox.netbox_virtual_machine:
+    netbox_url: "{{ netbox_addr }}"
+    netbox_token: "{{ netbox_token }}"
+    validate_certs: no
+    data:
+      name: "{{ item }}"
+    state: absent
+  tags:
+    - netbox_destroy
+  with_items: "{{ hostvars }}"

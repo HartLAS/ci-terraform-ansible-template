@@ -1,0 +1,167 @@
+---
+- include_vars:
+    file: linux_packages.yml
+  tags: 
+    - configure_system
+
+- name: Changing hostname
+  shell: "echo {{ inventory_hostname }} > /etc/hostname"
+  tags: 
+    - configure_system
+
+- name: Adding Debian local repo
+  block:
+    - name: Adding Debian default repo
+      ansible.builtin.apt_repository:
+        repo: "deb {{ lin_repo }}/debian/ {{ ansible_distribution_release }} main contrib non-free"
+        state: present
+
+    - name: Adding Debian updates repo
+      ansible.builtin.apt_repository:
+        repo: "deb {{ lin_repo }}/debian/ {{ ansible_distribution_release }}-updates main contrib non-free"
+        state: present
+
+  when: ansible_distribution == "Debian"
+  tags: 
+    - configure_system
+
+- name: Adding Ubuntu local repo
+  block:
+    - name: Adding Ubuntu default repo
+      ansible.builtin.apt_repository:
+        repo: "deb {{ lin_repo }}/ubuntu/ {{ ansible_distribution_release }} main restricted universe multiverse"
+        state: present
+
+    - name: Adding Ubuntu updates repo
+      ansible.builtin.apt_repository:
+        repo: "deb {{ lin_repo }}/ubuntu/ {{ ansible_distribution_release }}-updates main restricted universe multiverse"
+        state: present
+
+  when: ansible_distribution == "Ubuntu"
+  tags: 
+    - configure_system
+
+- name: Adding CentOS local repo
+  block:
+    - name: Adding CentOS default repo
+      ansible.builtin.yum_repository:
+        name: CentOS-$releasever - Base
+        description: default_repo
+        file: drb-repo
+        baseurl: "{{ lin_repo }}/centos/$releasever/os/$basearch/"
+        gpgkey: "{{ lin_repo }}/centos/$releasever/os/$basearch/RPM-GPG-KEY-CentOS-7"
+        gpgcheck: yes
+        enabled: yes
+
+    - name: Adding CentOS updates repo
+      ansible.builtin.yum_repository:
+        name: CentOS-$releasever - Updates
+        description: default_repo_updates
+        file: drb-repo         
+        baseurl: "{{ lin_repo }}/centos/$releasever/updates/$basearch/"
+        gpgkey: "{{ lin_repo }}/centos/$releasever/os/$basearch/RPM-GPG-KEY-CentOS-7"
+        gpgcheck: yes
+        enabled: yes
+
+    - name: Adding CentOS extras repo
+      ansible.builtin.yum_repository:
+        name: CentOS-$releasever - Extras
+        description: default_repo_extras
+        file: drb-repo
+        baseurl: "{{ lin_repo }}/centos/$releasever/extras/$basearch/"
+        gpgkey: "{{ lin_repo }}/centos/$releasever/os/$basearch/RPM-GPG-KEY-CentOS-7"
+        gpgcheck: yes
+        enabled: no
+
+    - name: Adding CentOS centos_plus repo
+      ansible.builtin.yum_repository:
+        name: CentOS-$releasever - Plus 
+        description: default_repo_centos_plus 
+        file: drb-repo
+        baseurl: "{{ lin_repo }}/centos/$releasever/centosplus/$basearch/"
+        gpgkey: "{{ lin_repo }}/centos/$releasever/os/$basearch/RPM-GPG-KEY-CentOS-7"
+        gpgcheck: yes
+        enabled: no
+
+    - name: Adding CentOS epel repo
+      ansible.builtin.yum_repository:
+        name: CentOS-$releasever - EPEL  
+        description: default_repo_epel
+        file: drb-repo
+        baseurl: "{{ lin_repo }}/epel/$releasever/$basearch/"
+        gpgkey: "{{ lin_repo }}/epel/RPM-GPG-KEY-EPEL-$releasever"
+        gpgcheck: yes
+        enabled: yes
+
+  when: ansible_distribution == "CentOS"
+  tags: 
+    - configure_system
+
+- name: Installing common packages (Debian, Ubuntu)
+  block:
+    - name: Installing gnupg
+      ansible.builtin.apt:
+        pkg:
+        - gnupg
+
+    - name: Wget zabbix key
+      shell: "wget -O - {{ lin_repo }}/zabbix/zabbix.key | apt-key add -"
+
+    - name: Edding zabbix repo
+      ansible.builtin.apt_repository:
+        repo: "deb {{ lin_repo }}/zabbix/6.4/debian {{ ansible_distribution_release }} main"
+        state: present
+      when: ansible_distribution == "Debian"
+
+    - name: Edding zabbix repo
+      ansible.builtin.apt_repository:
+        repo: "deb {{ lin_repo }}/zabbix/6.4/ubuntu {{ ansible_distribution_release }} main"
+        state: present
+      when: ansible_distribution == "Ubuntu"
+
+    - name: Install WMVare Tools & etc.
+      ansible.builtin.apt:
+        pkg:
+          - "{{ item  }}"
+      loop: "{{ deb_packages }}"
+
+  when: ansible_distribution != "CentOS"
+  tags: 
+    - configure_system
+
+- name: Installing common packages (CentOS)
+  block:
+    - name: Editing zabbix repo
+      shell: "rpm -ivh {{ lin_repo }}/zabbix-centos-6.4/x86_64/zabbix-agent2-6.4.6-release1.el7.x86_64.rpm"
+
+    - name: Install WMVare Tools & etc.
+      ansible.builtin.yum:
+        name:
+          - "{{ item  }}"
+        state: present
+      loop: "{{ deb_packages }}"
+
+  when: ansible_distribution == "CentOS"
+  tags: 
+    - configure_system
+
+- name: Configuring zabbix-agent
+  ansible.builtin.template:
+    src: linux_zabbix_agent2.j2
+    dest: /etc/zabbix/zabbix_agent2.conf
+  tags: 
+    - configure_system
+
+- name: Restarting and enabling zabbix-agent
+  ansible.builtin.service:
+    name: zabbix-agent2
+    state: restarted
+    enabled: yes
+  tags: 
+    - configure_system
+
+- name: Rebooting VM
+  ansible.builtin.reboot:
+  when: "inventory_hostname != ansible_hostname"
+  tags: 
+    - configure_system

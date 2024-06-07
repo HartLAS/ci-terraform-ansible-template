@@ -1,0 +1,86 @@
+---
+- name: Pulling Images for control plane (ContainerD)
+  shell: "kubeadm config images pull --cri-socket /run/containerd/containerd.sock"
+
+- name: Checking cluster path
+  stat:
+    path: "/root/.kube"
+  register: clstr_path
+
+- name: Creating New Cluster
+  block:
+
+    - name: Initing Cluster  
+      shell: "kubeadm init --pod-network-cidr='192.168.0.0/16' --control-plane-endpoint={{ inventory_hostname }} --v=7 --ignore-preflight-errors=all"
+
+    - name: Setup kubeconfig
+      command: "{{ item }}"
+      with_items:
+       - mkdir -p /root/.kube
+       - cp -i /etc/kubernetes/admin.conf /root/.kube/config
+       - chown root:root /root/.kube/config
+
+    - name: Copy calico settings
+      copy:
+        src: calico.yaml
+        dest: /root/calico.yaml
+
+    - name: Install calico pod network
+      command: kubectl apply -f /root/calico.yaml
+
+  when: "not clstr_path.stat.exists and 'master-1' in inventory_hostname"
+
+- name: Generate join command (for workers)
+  shell: "kubeadm token create --print-join-command"
+  register: join_command
+  when: "'master-1' in inventory_hostname"
+
+- name: Generate cert key for new Master
+  shell: "kubeadm init phase upload-certs --upload-certs | grep '[0-9]'"
+  register: new_key
+  when: "'master-1' in inventory_hostname"
+
+- name: Copy join node command to local file
+  local_action: copy content="{{ join_command.stdout_lines[0] }} --ignore-preflight-errors=all" dest="/tmp/join-command"
+  when: "'master-1' in inventory_hostname"  
+
+- name: Copy join master command to local file
+  local_action: copy content="{{ join_command.stdout_lines[0] }}  --control-plane --certificate-key {{ new_key.stdout_lines[0] }} --ignore-preflight-errors=all" dest="/tmp/join-master-command"
+  when: "'master-1' in inventory_hostname"
+
+- name: Get master-1 name
+  debug: 
+    msg: "{{ inventory_hostname }}"
+  when: "'master-1' in inventory_hostname"
+  register: master_name
+
+- name: Checking cluster path
+  stat:
+    path: "/root/.kube"
+  register: clstr_path_new
+
+- name: Join new Master
+  block:
+
+    - name: Copy the join command to server location
+      copy: src=/tmp/join-master-command dest=/tmp/join-master-command.sh mode=0777
+
+    - name: Join Master to cluster
+      command: sh /tmp/join-master-command.sh
+  
+    - name: Setup kubeconfig
+      command: "{{ item }}"
+      with_items:
+        - mkdir -p /root/.kube
+        - cp -i /etc/kubernetes/admin.conf /root/.kube/config
+        - chown root:root /root/.kube/config
+
+    - name: Copy calico settings
+      copy:
+        src: calico.yaml
+        dest: /root/calico.yaml
+
+    - name: Install calico pod network
+      command: kubectl apply -f /root/calico.yaml
+
+  when: "not clstr_path_new.stat.exists and 'master' in inventory_hostname"
